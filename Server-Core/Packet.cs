@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using static GamePacket;
 
-namespace Packet
+namespace Server_Core
 {
 	// �ֻ��� GamePacket �޽���
 	// ��Ŷ Ÿ�� ��� ���� (������ �����ؾ� ��)
@@ -354,7 +354,6 @@ namespace Packet
 		{
 			this.type = type;
 			this.version = version;
-			//this.sequence = sequence;
 			this.payloadBytes = payload;
 		}
 

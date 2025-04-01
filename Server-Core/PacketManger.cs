@@ -5,7 +5,7 @@ using System.Net;
 using System.IO;
 using static GamePacket;
 
-namespace Packet
+namespace Server_Core
 {
 	public abstract class TCPSocketManagerBase<T>
 	{
@@ -62,41 +62,6 @@ namespace Packet
 			InitPackets();
 			return this;
 		}
-
-		///// <summary>
-		///// ��ϵ� ip, port�� ���� ����
-		///// send, receiveť �̺�Ʈ ���
-		///// </summary>
-		///// <param name="callback"></param>
-		//public async void Connect(UnityAction callback = null)
-		//{
-
-		//    IPHostEntry ipHost = Dns.GetHostEntry("ducktopia-loadbalancer-1900b439129f13b9.elb.ap-northeast-2.amazonaws.com");
-		//    IPAddress ipAddress = ipHost.AddressList[0];
-		//    IPEndPoint endPoint = new IPEndPoint(ipAddress, port);
-
-		//    //Debug.Log("Tcp Ip : " + ipAddress.MapToIPv4().ToString() + ", Port : " + port);
-		//    socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-		//    try
-		//    {
-		//        await socket.ConnectAsync(endPoint);
-		//        isConnected = socket.Connected;
-		//        if (isConnected && !successConnected)
-		//        {
-		//            successConnected = true;
-		//        }
-		//        OnReceive();
-		//        StartCoroutine(OnSendQueue());
-		//        StartCoroutine(OnReceiveQueue());
-		//        StartCoroutine(Ping());
-		//        callback?.Invoke();
-		//    }
-		//    catch (Exception e)
-		//    {
-		//        //Debug.Log(e.ToString());
-		//    }
-		//}
-
 		private async void OnReceive()
 		{
 			if (socket == null)
