@@ -59,7 +59,7 @@ namespace Server_Core
 		SocketAsyncEventArgs _recvArgs = new SocketAsyncEventArgs();
 
 		public abstract void OnConnected(EndPoint endPoint);
-		public abstract int  OnRecv(ArraySegment<byte> buffer);
+		public abstract int OnRecv(ArraySegment<byte> buffer);
 		public abstract void OnSend(int numOfBytes);
 		public abstract void OnDisconnected(EndPoint endPoint);
 
@@ -76,6 +76,7 @@ namespace Server_Core
 		{
 			_socket = socket;
 
+			// 비동기 작업 완료 시 처리할 이벤트 추가
 			_recvArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnRecvCompleted);
 			_sendArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnSendCompleted);
 
@@ -172,6 +173,7 @@ namespace Server_Core
 			}
 		}
 
+		// 데이터 처리 메서드
 		void RegisterRecv()
 		{
 			if (_disconnected == 1)
@@ -184,6 +186,7 @@ namespace Server_Core
 			try
 			{
 				bool pending = _socket.ReceiveAsync(_recvArgs);
+				// 처리 완료 시 바로 다음 작업으로
 				if (pending == false)
 					OnRecvCompleted(null, _recvArgs);
 			}
@@ -195,45 +198,40 @@ namespace Server_Core
 
 		void OnRecvCompleted(object sender, SocketAsyncEventArgs args)
 		{
-			if (args.BytesTransferred > 0 && args.SocketError == SocketError.Success)
-			{
-				try
-				{
-					// Write 커서 이동
-					if (_recvBuffer.OnWrite(args.BytesTransferred) == false)
-					{
-						Disconnect();
-						return;
-					}
-
-					// 컨텐츠 쪽으로 데이터를 넘겨주고 얼마나 처리했는지 받는다
-					int processLen = OnRecv(_recvBuffer.ReadSegment);
-					if (processLen < 0 || _recvBuffer.DataSize < processLen)
-					{
-						Disconnect();
-						return;
-					}
-
-					// Read 커서 이동
-					if (_recvBuffer.OnRead(processLen) == false)
-					{
-						Disconnect();
-						return;
-					}
-
-					RegisterRecv();
-				}
-				catch (Exception e)
-				{
-					Console.WriteLine($"OnRecvCompleted Failed {e}");
-				}
-			}
-			else
-			{
+			if (args.BytesTransferred <= 0 || args.SocketError != SocketError.Success)
 				Disconnect();
+
+			try
+			{
+				// Write 커서 이동
+				if (_recvBuffer.OnWrite(args.BytesTransferred) == false)
+				{
+					Disconnect();
+					return;
+				}
+
+				// 컨텐츠 쪽으로 데이터를 넘겨주고 얼마나 처리했는지 받는다
+				int processLen = OnRecv(_recvBuffer.ReadSegment);
+				if (processLen < 0 || _recvBuffer.DataSize < processLen)
+				{
+					Disconnect();
+					return;
+				}
+
+				// Read 커서 이동
+				if (_recvBuffer.OnRead(processLen) == false)
+				{
+					Disconnect();
+					return;
+				}
+
+				RegisterRecv();
+			}
+			catch (Exception e)
+			{
+				Console.WriteLine($"OnRecvCompleted Failed {e}");
 			}
 		}
-
-		#endregion
 	}
+	#endregion
 }

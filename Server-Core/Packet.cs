@@ -218,8 +218,6 @@ namespace Server_Core
 			{ PayloadOneofCase.DropItemNotification, ePacketType.DROP_ITEM_NOTIFICATION },
 		};
 
-
-
 		public static ePacketType ConvertToPacketType(PayloadOneofCase payloadType)
 		{
 			return PacketTypeMapping.TryGetValue(payloadType, out var packetType) ? packetType : ePacketType.NONE;
@@ -356,7 +354,6 @@ namespace Server_Core
 			this.version = version;
 			this.payloadBytes = payload;
 		}
-
 
 		public ArraySegment<byte> ToByteArray()
 		{
