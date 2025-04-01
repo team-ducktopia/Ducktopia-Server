@@ -1,4 +1,4 @@
-﻿namespace Lobby_Server
+namespace Lobby_Server
 {
     internal class Program
     {
