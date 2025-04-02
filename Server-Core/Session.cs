@@ -6,142 +6,86 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using static GamePacket;
+using Google.Protobuf.WellKnownTypes;
 
 namespace Server_Core
 {
 	public abstract class PacketSession : Session
 	{
 		public static readonly int HeaderSize = 2;
-		byte[] recvBuff = new byte[1024];
 
-		// [size(2)][packetId(2)][ ... ][size(2)][packetId(2)][ ... ]
-		public sealed override int OnRecv(ArraySegment<byte> buffer)
+		// [PacketType(2)][VerstionLength(1)][Version(..)][PayloadLength(4)][Payload(..)]
+		public sealed override int OnRecv(Span<byte> buffer)
 		{
-			int processLen = 0;
+			int processedLength = 0;
 			int packetCount = 0;
 
-			while (true)
+			var recvByteLength = buffer.Length;
+			//Console.WriteLine($"📥 [OnReceive] 수신된 데이터 길이: {recvByteLength} 바이트");
+
+			while (processedLength < recvByteLength)
 			{
-				var recvByteLength = _socket.ReceiveAsync(recvBuff, SocketFlags.None);
-				//Debug.Log($"📥 [OnReceive] 수신된 데이터 길이: {recvByteLength} 바이트");
-
-				if (!isConnected)
-					// Debug.Log("⚠️ [OnReceive] 소켓 연결 종료 감지");
+				if (recvByteLength - processedLength < 3)
 					break;
 
-				if (recvByteLength <= 0)
-					continue;
+				ushort count = 0;
+				// 1️⃣ 패킷 타입 (2바이트)
+				Span<byte> typeBytes = buffer.Slice(count, 2);
+				ePacketType ePacketType = (ePacketType)BitConverter.ToInt16(typeBytes);
+				PayloadOneofCase type = PacketMapper.ConvertToPayloadCase(ePacketType);
+				count += 2;
+				//Console.WriteLine($"📌 [OnReceive] 패킷 타입: {type} (원본: {BitConverter.ToString(typeBytes)})");
 
-				// 🔹 새 버퍼 할당 및 기존 remainBuffer와 결합
-				byte[] newBuffer = ArrayPool<byte>.Shared.Rent(remainBuffer.Length + recvByteLength);
-				try
-				{
-					Buffer.BlockCopy(remainBuffer, 0, newBuffer, 0, remainBuffer.Length);
-					Buffer.BlockCopy(recvBuff, 0, newBuffer, remainBuffer.Length, recvByteLength);
-					// 사용 후 처리  
-				}
-				finally
-				{
-					ArrayPool<byte>.Shared.Return(newBuffer);
-				}
-				//Debug.Log($"🔄 [OnReceive] 새로운 버퍼 길이: {newBuffer.Length} 바이트");
+				// 2️⃣ 버전 길이 (1바이트) + 숫자변환
+				ushort versionLength = buffer[count];
+				count += 1;
+				//Console.WriteLine($"📌 [OnReceive] 버전 길이: {versionLength}");
 
-				var processedLength = 0;
-				while (processedLength < newBuffer.Length)
-				{
-					if (newBuffer.Length - processedLength < 7)
-						break;
-
-					using var stream = new MemoryStream(newBuffer, processedLength, newBuffer.Length - processedLength);
-					using var reader = new BinaryReader(stream);
-
-					// 1️⃣ 패킷 타입 (2바이트)
-					var typeBytes = reader.ReadBytes(2);
-					Array.Reverse(typeBytes);
-					var epacketType = (ePacketType)BitConverter.ToInt16(typeBytes);
-					var type = Packet.ConvertToPayloadCase(epacketType);
-					//Debug.Log($"📌 [OnReceive] 패킷 타입: {type} (원본: {BitConverter.ToString(typeBytes)})");
-
-					// 2️⃣ 버전 길이 (1바이트)
-					var versionLength = reader.ReadByte();
-					//Debug.Log($"📌 [OnReceive] 버전 길이: {versionLength}");
-
-					// 버전 길이 검사
-					if (newBuffer.Length - processedLength < 7 + versionLength)
-						break;
-
-					// 3️⃣ 버전 데이터 (가변 길이)
-					var versionBytes = reader.ReadBytes(versionLength);
-					var version = System.Text.Encoding.UTF8.GetString(versionBytes);
-					//Debug.Log($"📌 [OnReceive] 버전: {version} (원본: {BitConverter.ToString(versionBytes)})");
-
-					// 4️⃣ 페이로드 길이 (4바이트)
-					byte[] payloadLengthBytes = reader.ReadBytes(4);
-					int payloadLength = BinaryPrimitives.ReadInt32BigEndian(payloadLengthBytes);
-					//Debug.Log($"📌 [OnReceive] 페이로드 길이: {payloadLength} (원본: {BitConverter.ToString(payloadLengthBytes)})");
-
-					// 페이로드 길이 검사
-					if (newBuffer.Length - processedLength < 7 + versionLength + payloadLength)
-						break;
-
-					// 5️⃣ 페이로드 데이터
-					var payloadBytes = reader.ReadBytes(payloadLength);
-					//Debug.Log($"📦 [OnReceive] 페이로드 데이터: {BitConverter.ToString(payloadBytes)}");
-
-					// 6️⃣ 패킷 생성 및 큐에 추가
-					var packetType = Packet.ConvertToPacketType(type);
-					var packet = new Packet(packetType, version, payloadBytes);
-					receiveQueue.Enqueue(packet);
-					//Debug.Log($"✅ [OnReceive] 큐에 추가됨 (패킷 타입: {type}, 현재 큐 크기: {receiveQueue.Count})");
-
-					processedLength += (7 + versionLength + payloadLength);
-				}
-
-				// 남은 데이터 처리
-				var remainLength = newBuffer.Length - processedLength;
-				if (remainLength > 0)
-				{
-					remainBuffer = new byte[remainLength];
-					Array.Copy(newBuffer, processedLength, remainBuffer, 0, remainLength);
-					//Debug.Log($"🔄 [OnReceive] 남은 버퍼 크기: {remainLength} 바이트");
-				}
-				else
-				{
-					remainBuffer = Array.Empty<byte>();
-					//Debug.Log("🛑 [OnReceive] 남은 버퍼 없음, 초기화 완료");
-				}
-			}
-			catch (Exception e)
-				{
-				//Debug.LogError($"🚨 [OnReceive] 예외 발생: {e.Message}\n{e.StackTrace}");
-			}
-
-			// 최소한 헤더는 파싱할 수 있는지 확인
-			if (buffer.Count < HeaderSize)
+				// 버전 길이 검사
+				if (recvByteLength - processedLength < 3 + versionLength)
 					break;
 
-			// 패킷이 완전체로 도착했는지 확인
-			ushort dataSize = BitConverter.ToUInt16(buffer.Array, buffer.Offset);
-			if (buffer.Count < dataSize)
-				break;
+				// 3️⃣ 버전 데이터 (가변 길이)
+				Span<byte> versionBytes = buffer.Slice(count, versionLength);
+				string version = Encoding.UTF8.GetString(versionBytes);
+				count += versionLength;
+				//Console.WriteLine($"📌 [OnReceive] 버전: {version} (원본: {BitConverter.ToString(versionBytes)})");
 
-			// 여기까지 왔으면 패킷 조립 가능
-			OnRecvPacket(new ArraySegment<byte>(buffer.Array, buffer.Offset, dataSize));
-			packetCount++;
+				// 4️⃣ 페이로드 길이 (4바이트)
+				Span<byte> payloadLengthBytes = buffer.Slice(count, 4);
+				int payloadLength = BitConverter.ToInt32(payloadLengthBytes);
+				count += 4;
+				//Console.WriteLine($"📌 [OnReceive] 페이로드 길이: {payloadLength} (원본: {BitConverter.ToString(payloadLengthBytes)})");
 
-			processLen += dataSize;
-			buffer = new ArraySegment<byte>(buffer.Array, buffer.Offset + dataSize, buffer.Count - dataSize);
+				// 페이로드 길이 검사
+				if (recvByteLength - processedLength < 3 + versionLength + 4 + payloadLength)
+					break;
+
+				// 5️⃣ 페이로드 데이터
+				Span<byte> payloadBytes = buffer.Slice(count, payloadLength);
+				count += (ushort)payloadLength;
+				//Console.WriteLine($"📦 [OnReceive] 페이로드 데이터: {BitConverter.ToString(payloadBytes)}");
+
+				// 6️⃣ 패킷 생성 및 큐에 추가
+				var packetType = PacketMapper.ConvertToPacketType(type);
+				var packet = new Packet(packetType, version, payloadBytes);
+
+				// 여기까지 왔으면 패킷 조립 가능
+				OnRecvPacket(packet);
+				packetCount++;
+
+				//Console.WriteLine($"✅ [OnReceive] 큐에 추가됨 (패킷 타입: {type}, 현재 큐 크기: {receiveQueue.Count})");
+				processedLength += 7 + versionLength + payloadLength;
+			}
 
 			if (packetCount > 1)
 				Console.WriteLine($"패킷 모아보내기 : {packetCount}");
 
-			return processLen;
+			return processedLength;
 		}
 
-
-		
-
-		public abstract void OnRecvPacket(ArraySegment<byte> buffer);
+		public abstract void OnRecvPacket(Packet packet);
 	}
 
 	public abstract class Session
@@ -152,13 +96,13 @@ namespace Server_Core
 		RecvBuffer _recvBuffer = new RecvBuffer(65535);
 
 		object _lock = new object();
-		Queue<ArraySegment<byte>> _sendQueue = new Queue<ArraySegment<byte>>();
+		Queue<ReadOnlyMemory<byte>> _sendQueue = new Queue<ReadOnlyMemory<byte>>();
 		List<ArraySegment<byte>> _pendingList = new List<ArraySegment<byte>>();
 		SocketAsyncEventArgs _sendArgs = new SocketAsyncEventArgs();
 		SocketAsyncEventArgs _recvArgs = new SocketAsyncEventArgs();
 
 		public abstract void OnConnected(EndPoint endPoint);
-		public abstract int OnRecv(ArraySegment<byte> buffer);
+		public abstract int OnRecv(Span<byte> buffer);
 		public abstract void OnSend(int numOfBytes);
 		public abstract void OnDisconnected(EndPoint endPoint);
 
@@ -182,14 +126,14 @@ namespace Server_Core
 			RegisterRecv();
 		}
 
-		public void Send(List<ArraySegment<byte>> sendBuffList)
+		public void Send(List<ReadOnlyMemory<byte>> sendBuffList)
 		{
 			if (sendBuffList.Count == 0)
 				return;
 
 			lock (_lock)
 			{
-				foreach (ArraySegment<byte> sendBuff in sendBuffList)
+				foreach (ReadOnlyMemory<byte> sendBuff in sendBuffList)
 					_sendQueue.Enqueue(sendBuff);
 
 				if (_pendingList.Count == 0)
@@ -197,7 +141,7 @@ namespace Server_Core
 			}
 		}
 
-		public void Send(ArraySegment<byte> sendBuff)
+		public void Send(ReadOnlyMemory<byte> sendBuff)
 		{
 			lock (_lock)
 			{
@@ -227,8 +171,8 @@ namespace Server_Core
 
 			while (_sendQueue.Count > 0)
 			{
-				ArraySegment<byte> buff = _sendQueue.Dequeue();
-				_pendingList.Add(buff);
+				ReadOnlyMemory<byte> buffer = _sendQueue.Dequeue();
+				_pendingList.Add(buffer.Span.ToArray());
 			}
 			_sendArgs.BufferList = _pendingList;
 
@@ -248,26 +192,22 @@ namespace Server_Core
 		{
 			lock (_lock)
 			{
-				if (args.BytesTransferred > 0 && args.SocketError == SocketError.Success)
-				{
-					try
-					{
-						_sendArgs.BufferList = null;
-						_pendingList.Clear();
-
-						OnSend(_sendArgs.BytesTransferred);
-
-						if (_sendQueue.Count > 0)
-							RegisterSend();
-					}
-					catch (Exception e)
-					{
-						Console.WriteLine($"OnSendCompleted Failed {e}");
-					}
-				}
-				else
-				{
+				if (args.BytesTransferred <= 0 || args.SocketError != SocketError.Success)
 					Disconnect();
+
+				try
+				{
+					_sendArgs.BufferList = null;
+					_pendingList.Clear();
+
+					OnSend(_sendArgs.BytesTransferred);
+
+					if (_sendQueue.Count > 0)
+						RegisterSend();
+				}
+				catch (Exception e)
+				{
+					Console.WriteLine($"OnSendCompleted Failed {e}");
 				}
 			}
 		}
@@ -278,12 +218,14 @@ namespace Server_Core
 			if (_disconnected == 1)
 				return;
 
+			// 버퍼 정리 
 			_recvBuffer.Clean();
-			ArraySegment<byte> segment = _recvBuffer.WriteSegment;
-			_recvArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
 
 			try
 			{
+				// 비동기 수신 이벤트에 버퍼 설정  
+				_recvBuffer.ConfigureSocketBuffer(_recvArgs);
+
 				bool pending = _socket.ReceiveAsync(_recvArgs);
 				// 처리 완료 시 바로 다음 작업으로
 				if (pending == false)
