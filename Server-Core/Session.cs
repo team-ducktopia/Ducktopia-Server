@@ -71,15 +71,15 @@ namespace Server_Core
 				count += (ushort)payloadLength;
 				//Console.WriteLine($"📦 [OnReceive] 페이로드 데이터: {BitConverter.ToString(payloadBytes)}");
 
-				// 6️⃣ 패킷 생성 및 큐에 추가
+				// 6️⃣ 패킷 생성
 				var packetType = PacketMapper.ConvertToPacketType(type);
 				var packet = new Packet(packetType, version, payloadBytes);
 
-				// 여기까지 왔으면 패킷 조립 가능
+				// 핸들러 실행
 				OnRecvPacket(packet);
 				packetCount++;
 
-				//Console.WriteLine($"✅ [OnReceive] 큐에 추가됨 (패킷 타입: {type}, 현재 큐 크기: {receiveQueue.Count})");
+				// 길이 저장
 				processedLength += 7 + versionLength + payloadLength;
 			}
 
