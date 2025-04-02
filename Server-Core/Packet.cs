@@ -105,26 +105,13 @@ namespace Server_Core
 		GAME_CLEAR_NOTIFICATION = 9999
 	}
 
-	public class Packet
+	public static class PacketMapper
 	{
-		public ePacketType type;
-		public string version;
-
-		//public int sequence;
-		public byte[] payloadBytes;
-		public GamePacket gamePacket
-		{
-			get
-			{
-				GamePacket gamePacket = new GamePacket();
-				gamePacket.MergeFrom(payloadBytes);
-				return gamePacket;
-			}
-		}
-
-		private static readonly Dictionary<PayloadOneofCase, ePacketType> PacketTypeMapping = new()
-		{
-			{ PayloadOneofCase.None, ePacketType.NONE },
+		// 캐싱을 통한 성능 최적화  
+		private static readonly Dictionary<PayloadOneofCase, ePacketType> _packetTypeCache
+				= new Dictionary<PayloadOneofCase, ePacketType>()
+				{
+				{ PayloadOneofCase.None, ePacketType.NONE },
 
       // 회원가입 및 로그인
       { PayloadOneofCase.RegisterRequest, ePacketType.REGISTER_REQUEST },
@@ -216,16 +203,12 @@ namespace Server_Core
 			{ PayloadOneofCase.ItemDetachmentNotification, ePacketType.ITEM_DETACHMENT_NOTIFICATION },
 			{ PayloadOneofCase.DropItemRequest, ePacketType.DROP_ITEM_REQUEST },
 			{ PayloadOneofCase.DropItemNotification, ePacketType.DROP_ITEM_NOTIFICATION },
-		};
+				};
 
-		public static ePacketType ConvertToPacketType(PayloadOneofCase payloadType)
-		{
-			return PacketTypeMapping.TryGetValue(payloadType, out var packetType) ? packetType : ePacketType.NONE;
-		}
-
-		private static readonly Dictionary<ePacketType, PayloadOneofCase> ReversePacketTypeMapping = new()
-		{
-			{ ePacketType.NONE, PayloadOneofCase.None },
+		private static readonly Dictionary<ePacketType, PayloadOneofCase> _reversePacketTypeCache
+				= new Dictionary<ePacketType, PayloadOneofCase>()
+				{
+					{ ePacketType.NONE, PayloadOneofCase.None },
 
 			// 회원가입 및 로그인
 			{ ePacketType.REGISTER_REQUEST, PayloadOneofCase.RegisterRequest },
@@ -318,41 +301,46 @@ namespace Server_Core
 			{ ePacketType.ITEM_DETACHMENT_NOTIFICATION, PayloadOneofCase.ItemDetachmentNotification },
 			{ ePacketType.DROP_ITEM_REQUEST, PayloadOneofCase.DropItemRequest },
 			{ ePacketType.DROP_ITEM_NOTIFICATION, PayloadOneofCase.DropItemNotification },
-		};
+				};
+
+
+		public static ePacketType ConvertToPacketType(PayloadOneofCase payloadType)
+		{
+			return _packetTypeCache.TryGetValue(payloadType, out var packetType)
+					? packetType
+					: ePacketType.NONE;
+		}
 
 		public static PayloadOneofCase ConvertToPayloadCase(ePacketType packetType)
 		{
-			return ReversePacketTypeMapping.TryGetValue(packetType, out var payloadType) ? payloadType : PayloadOneofCase.None;
+			return _reversePacketTypeCache.TryGetValue(packetType, out var payloadType)
+					? payloadType
+					: PayloadOneofCase.None;
 		}
+	}
 
-		public MessageDescriptor Descriptor => throw new NotImplementedException();
+	public class Packet
+	{
+		public ePacketType type;
+		public string version;
 
-		public Packet(byte[] bytes)
+		//public int sequence;
+		public byte[] payloadBytes;
+		public GamePacket gamePacket
 		{
-			var stream = new MemoryStream(bytes);
-			var reader = new BinaryReader(stream);
-
-			var data = reader.ReadBytes(2);
-			Array.Reverse(data);
-			var packetTypeValue = BitConverter.ToInt16(data);
-
-			// 🔥 ePacketType으로 변환
-			type = (ePacketType)packetTypeValue;
-			data = reader.ReadBytes(1);
-			var length = data[0] & 0xff;
-			data = reader.ReadBytes(length);
-			version = BitConverter.ToString(data);
-			data = reader.ReadBytes(4);
-			Array.Reverse(data);
-			var payloadLength = BitConverter.ToInt32(data);
-			payloadBytes = reader.ReadBytes(payloadLength);
+			get
+			{
+				GamePacket gamePacket = new GamePacket();
+				gamePacket.MergeFrom(payloadBytes);
+				return gamePacket;
+			}
 		}
 
-		public Packet(ePacketType type, string version, byte[] payload)
+		public Packet(ePacketType type, string version, Span<byte> payload)
 		{
 			this.type = type;
 			this.version = version;
-			this.payloadBytes = payload;
+			this.payloadBytes = payload.ToArray();
 		}
 
 		public ArraySegment<byte> ToByteArray()
