@@ -18,9 +18,9 @@ namespace Game_Server
 			Console.WriteLine($"OnConnected : {endPoint}");
 		}
 
-		public override void OnRecvPacket(Packet packet)
+		public override async void OnRecvPacket(Packet packet)
 		{
-			BaseHandlerManager<ePacketType, GamePacket>.Instance.OnRecvPacketAsync(packet.type, packet.gamePacket);
+			await HandlerManager.Instance.OnRecvPacketAsync(packet.type, packet.gamePacket);
 		}
 
 		public override void OnDisconnected(EndPoint endPoint)
