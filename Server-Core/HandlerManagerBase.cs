@@ -21,12 +21,6 @@ namespace Server_Core
 		protected ConcurrentDictionary<TPacketType, Func<TGamePacket, Task>> Handlers
 				= new ConcurrentDictionary<TPacketType, Func<TGamePacket, Task>>();
 
-		// 핸들러 인터페이스  
-		public interface IPacketHandler
-		{
-			Task HandleAsync(TGamePacket packet);
-		}
-
 		// 생성자에서 핸들러 자동 등록  
 		protected HandlerManagerBase()
 		{
