@@ -12,52 +12,14 @@ using System.Reflection;
 namespace Server_Core
 {
 	// 추상화된 기본 핸들러 매니저  
-	public abstract class BaseHandlerManager<TPacketType, TGamePacket>
+	public abstract class HandlerManagerBase<TPacketType, TGamePacket>
 			where TPacketType : Enum
 			where TGamePacket : class
 	{
-		// 스레드 안전한 싱글톤  
-		private static readonly object _lock = new object();
-		private static BaseHandlerManager<TPacketType, TGamePacket> _instance;
 
 		// 스레드 안전한 핸들러 저장소  
 		protected ConcurrentDictionary<TPacketType, Func<TGamePacket, Task>> Handlers
 				= new ConcurrentDictionary<TPacketType, Func<TGamePacket, Task>>();
-
-		// 싱글톤 인스턴스 속성  
-		public static BaseHandlerManager<TPacketType, TGamePacket> Instance
-		{
-			get
-			{
-				// 이중 검사 락킹 (Double-Check Locking)  
-				if (_instance == null)
-				{
-					lock (_lock)
-					{
-						// 인스턴스가 없는 경우에만 생성  
-						_instance ??= CreateInstance();
-					}
-				}
-				return _instance;
-			}
-		}
-
-		// 인스턴스 생성 메서드  
-		private static BaseHandlerManager<TPacketType, TGamePacket> CreateInstance()
-		{
-			// 파생 클래스의 타입을 사용  
-			var derivedType = typeof(BaseHandlerManager<TPacketType, TGamePacket>);
-
-			// null 체크 추가  
-			var instance = Activator.CreateInstance(derivedType);
-
-			if (instance is BaseHandlerManager<TPacketType, TGamePacket> handlerManager)
-				return handlerManager;
-
-			throw new InvalidOperationException("인스턴스 생성 실패");
-		}
-		
-
 
 		// 핸들러 인터페이스  
 		public interface IPacketHandler
@@ -66,7 +28,7 @@ namespace Server_Core
 		}
 
 		// 생성자에서 핸들러 자동 등록  
-		protected BaseHandlerManager()
+		protected HandlerManagerBase()
 		{
 			RegisterHandlers();
 		}
