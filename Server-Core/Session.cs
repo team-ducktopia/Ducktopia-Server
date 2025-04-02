@@ -32,7 +32,10 @@ namespace Server_Core
 				ushort count = 0;
 				// 1️⃣ 패킷 타입 (2바이트)
 				Span<byte> typeBytes = buffer.Slice(count, 2);
-				ePacketType ePacketType = (ePacketType)BitConverter.ToInt16(typeBytes);
+				//빅 엔디안 -> 리틀 엔디안 변경
+				ePacketType ePacketType = (ePacketType)IPAddress.NetworkToHostOrder(BitConverter.ToInt16(typeBytes));
+				// 기본 엔디안
+				// ePacketType ePacketType = (ePacketType)BitConverter.ToInt16(typeBytes);
 				PayloadOneofCase type = PacketMapper.ConvertToPayloadCase(ePacketType);
 				count += 2;
 				//Console.WriteLine($"📌 [OnReceive] 패킷 타입: {type} (원본: {BitConverter.ToString(typeBytes)})");
@@ -54,7 +57,8 @@ namespace Server_Core
 
 				// 4️⃣ 페이로드 길이 (4바이트)
 				Span<byte> payloadLengthBytes = buffer.Slice(count, 4);
-				int payloadLength = BitConverter.ToInt32(payloadLengthBytes);
+				//빅 엔디안 -> 리틀 엔디안 변경
+				int payloadLength = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(payloadLengthBytes));
 				count += 4;
 				//Console.WriteLine($"📌 [OnReceive] 페이로드 길이: {payloadLength} (원본: {BitConverter.ToString(payloadLengthBytes)})");
 
