@@ -1,4 +1,5 @@
 using Google.Protobuf;
+using Google.Protobuf.Compiler;
 using Google.Protobuf.Reflection;
 using System;
 using System.Collections.Generic;
@@ -321,26 +322,25 @@ namespace Server_Core
 
 	public class Packet
 	{
-		public ePacketType type;
-		public string version;
-
-		//public int sequence;
-		public byte[] payloadBytes;
+		// [PacketType(2)][VerstionLength(1)][Version(..)][PayloadLength(4)][Payload(..)]
+		public ePacketType _type;
+		public string _version;
+		public byte[] _payloadBytes;
 		public GamePacket gamePacket
 		{
 			get
 			{
 				GamePacket gamePacket = new GamePacket();
-				gamePacket.MergeFrom(payloadBytes);
+				gamePacket.MergeFrom(_payloadBytes);
 				return gamePacket;
 			}
 		}
 
 		public Packet(ePacketType type, string version, Span<byte> payload)
 		{
-			this.type = type;
-			this.version = version;
-			this.payloadBytes = payload.ToArray();
+			_type = type;
+			_version = version;
+			_payloadBytes = payload.ToArray();
 		}
 
 		public ArraySegment<byte> ToByteArray()
