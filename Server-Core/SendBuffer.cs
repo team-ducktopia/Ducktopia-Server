@@ -9,9 +9,9 @@ namespace Server_Core
 	{
 		public static ThreadLocal<SendBuffer> CurrentBuffer = new ThreadLocal<SendBuffer>(() => { return null; });
 
-		public static int ChunkSize { get; set; } = 65535 * 100;
+		public static int ChunkSize { get; set; } = 65535;
 
-		public static ArraySegment<byte> Open(int reserveSize)
+		public static Span<byte> Open(int reserveSize)
 		{
 			if (CurrentBuffer.Value == null)
 				CurrentBuffer.Value = new SendBuffer(ChunkSize);
@@ -22,7 +22,7 @@ namespace Server_Core
 			return CurrentBuffer.Value.Open(reserveSize);
 		}
 
-		public static ArraySegment<byte> Close(int usedSize)
+		public static ReadOnlySpan<byte> Close(int usedSize)
 		{
 			return CurrentBuffer.Value.Close(usedSize);
 		}
@@ -31,7 +31,7 @@ namespace Server_Core
 	public class SendBuffer
 	{
 		// [][][][][][][][][u][]
-		byte[] _buffer;
+		Memory<byte> _buffer;
 		int _usedSize = 0;
 
 		public int FreeSize { get { return _buffer.Length - _usedSize; } }
@@ -41,17 +41,17 @@ namespace Server_Core
 			_buffer = new byte[chunkSize];
 		}
 
-		public ArraySegment<byte> Open(int reserveSize)
+		public Span<byte> Open(int reserveSize)
 		{
 			if (reserveSize > FreeSize)
-				return null;
+				return Span<byte>.Empty;
 
-			return new ArraySegment<byte>(_buffer, _usedSize, reserveSize);
+			return _buffer.Span.Slice(_usedSize, reserveSize);
 		}
 
-		public ArraySegment<byte> Close(int usedSize)
+		public ReadOnlySpan<byte> Close(int usedSize)
 		{
-			ArraySegment<byte> segment = new ArraySegment<byte>(_buffer, _usedSize, usedSize);
+			ReadOnlySpan<byte> segment = _buffer.Span.Slice(_usedSize, usedSize);
 			_usedSize += usedSize;
 			return segment;
 		}
