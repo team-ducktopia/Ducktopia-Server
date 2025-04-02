@@ -20,7 +20,7 @@ namespace Game_Server
 
 		public override async void OnRecvPacket(Packet packet)
 		{
-			await HandlerManager.Instance.OnRecvPacketAsync(packet.type, packet.gamePacket);
+			await HandlerManager.Instance.OnRecvPacketAsync(packet.Type, packet.GamePacket);
 		}
 
 		public override void OnDisconnected(EndPoint endPoint)

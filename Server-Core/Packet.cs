@@ -323,10 +323,13 @@ namespace Server_Core
 	public class Packet
 	{
 		// [PacketType(2)][VerstionLength(1)][Version(..)][PayloadLength(4)][Payload(..)]
-		public ePacketType _type;
-		public string _version;
-		public byte[] _payloadBytes;
-		public GamePacket gamePacket
+		private ePacketType _type;
+		public ePacketType Type { get { return _type; } }
+		private string _version;
+		public string Version { get { return _version; } }
+		private byte[] _payloadBytes;
+		public byte[] PayloadBytes { get { return _payloadBytes; } }
+		public GamePacket GamePacket
 		{
 			get
 			{
