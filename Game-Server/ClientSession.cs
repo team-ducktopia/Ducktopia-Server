@@ -16,12 +16,11 @@ namespace Game_Server
 		public override void OnConnected(EndPoint endPoint)
 		{
 			Console.WriteLine($"OnConnected : {endPoint}");
-
 		}
 
-		public override void OnRecvPacket(ArraySegment<byte> buffer)
+		public override void OnRecvPacket(Packet packet)
 		{
-			//PacketManager.Instance.OnRecvPacket(this, buffer);
+			BaseHandlerManager<ePacketType, GamePacket>.Instance.OnRecvPacketAsync(packet.type, packet.gamePacket);
 		}
 
 		public override void OnDisconnected(EndPoint endPoint)
