@@ -1,15 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using Config;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Config;
 using Server_Core;
+using Microsoft.Extensions.Configuration;
+using DotNetEnv;
 
 namespace Game_Server
 {
@@ -17,46 +15,39 @@ namespace Game_Server
 	{
 		static Listener _listener = new Listener();
 
-		static void Main(string[] args)
+		static async Task Main(string[] args)
 		{
-			Console.WriteLine(AppSettings.Port);
-			CreateHostBuilder(args).Build().Run();
-			Console.WriteLine(AppSettings.Port);
+			// 실행 중인 어셈블리(.exe)의 디렉토리 기준으로 .env 파일 로드
+			string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+			string envPath = Path.Combine(baseDir, ".env");
+			Env.Load(envPath);
 
+			// 환경변수 가져오기
+			string? hostStr = Environment.GetEnvironmentVariable("APPSETTINGS_HOST");
+			string? portStr = Environment.GetEnvironmentVariable("APPSETTINGS_PORT");
 
-			// DNS (Domain Name System)
-			string host = Dns.GetHostName();
-			IPHostEntry ipHost = Dns.GetHostEntry(host);
-			IPAddress ipAddr = ipHost.AddressList[1];
-			IPEndPoint endPoint = new IPEndPoint(ipAddr, 5555);
-
-			_listener.Init(endPoint, () => { return SessionManager.Instance.Generate(); });
-			Console.WriteLine($"{endPoint}에서 Listening...");
-
-			while (true)
+			if (string.IsNullOrWhiteSpace(hostStr) || string.IsNullOrWhiteSpace(portStr))
 			{
+				Console.WriteLine("환경변수 APPSETTINGS_HOST 또는 APPSETTINGS_PORT가 없습니다.");
+				return;
 			}
+
+			if (!int.TryParse(portStr, out int port))
+			{
+				Console.WriteLine("PORT는 숫자여야 합니다.");
+				return;
+			}
+
+			IPAddress ipAddr = IPAddress.Parse(hostStr);
+			IPEndPoint endPoint = new IPEndPoint(ipAddr, port);
+
+			_listener.Init(endPoint, () => SessionManager.Instance.Generate());
+
+			Console.WriteLine($"{endPoint} 에서 Listening...");
+
+			// host.RunAsync(); → host가 string이기 때문에 충돌
+			// 서버 루프가 없다면 여기서 블로킹하거나, IHost 구현체 사용 고려
+			await Task.Delay(-1); // 프로그램을 종료하지 않고 대기
 		}
-
-		// 호스트 빌더 (환경변수 가져오기) 
-		public static IHostBuilder CreateHostBuilder(string[] args) =>
-		// 기본 호스트 빌더 생성  
-		Host.CreateDefaultBuilder(args)
-				// 서비스 구성  
-				.ConfigureServices((hostContext, services) =>
-				{
-					// 설정 바인딩: JSON의 "AppSettings" 섹션을 AppSettings 클래스에 매핑  
-					services.Configure<AppSettings>(
-							hostContext.Configuration.GetSection("AppSettings")
-					);
-
-					// AppSettings를 싱글톤으로 직접 등록  
-					services.AddSingleton(sp =>
-					{
-						// IOptions<AppSettings>에서 실제 AppSettings 값 추출  
-						var options = sp.GetRequiredService<IOptions<AppSettings>>();
-						return options.Value;
-					});
-				});
 	}
 }
